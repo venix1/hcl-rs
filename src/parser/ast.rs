@@ -33,10 +33,9 @@ impl<'a> Node<'a> {
             Rule::NullLit => Node::Null(pair),
             Rule::StringLit => Node::String(pair.into_inner().next().unwrap()),
             Rule::Tuple => Node::Seq(collect_seq(pair)),
-            Rule::BlockBody => Node::BlockBody(collect_seq(pair)),
             Rule::Object => Node::Map(collect_map(pair)),
             Rule::Attribute => Node::Attribute(collect_map(pair)),
-            Rule::Block | Rule::BlockLabeled => Node::Block(collect_map(pair)),
+            Rule::Block => build_block(pair.into_inner()),
             Rule::Body => {
                 Node::Map(pair.into_inner().fold(Map::new(), |mut body, pair| {
                     let node = Node::from_pair(pair);
@@ -112,6 +111,27 @@ fn collect_seq(pair: Pair<Rule>) -> Vec<Node> {
 
 fn collect_map(pair: Pair<Rule>) -> Map<String, Node> {
     KeyValueIter::new(pair).collect()
+}
+
+fn build_block<'a>(mut pairs: Pairs<'a, Rule>) -> Node<'a> {
+    let pair = pairs.next().unwrap();
+
+    match pair.as_rule() {
+        Rule::Identifier => {
+            let key = pair.as_str().to_owned();
+            let mut map = Map::with_capacity(1);
+            map.insert(key, build_block(pairs));
+            Node::Block(map)
+        }
+        Rule::StringLit => {
+            let key = pair.into_inner().next().unwrap().as_str().to_owned();
+            let mut map = Map::with_capacity(1);
+            map.insert(key, build_block(pairs));
+            Node::Block(map)
+        }
+        Rule::BlockBody => Node::BlockBody(collect_seq(pair)),
+        rule => panic!("unexpected rule: {:?}", rule),
+    }
 }
 
 fn interpolate(s: &str) -> String {
