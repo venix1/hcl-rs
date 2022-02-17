@@ -31,7 +31,7 @@ impl<'de> Deserializer<'de> {
     ///
     /// [Error]: ../error/enum.Error.html
     pub fn from_str(input: &'de str) -> Result<Self> {
-        let root = parser::parse(input)?;
+        let root = parser::parse_node(input)?;
         Ok(Deserializer::from_node(root))
     }
 

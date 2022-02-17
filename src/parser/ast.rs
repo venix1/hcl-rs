@@ -113,7 +113,7 @@ fn collect_map(pair: Pair<Rule>) -> Map<String, Node> {
     KeyValueIter::new(pair).collect()
 }
 
-fn build_block<'a>(mut pairs: Pairs<'a, Rule>) -> Node<'a> {
+fn build_block(mut pairs: Pairs<Rule>) -> Node {
     let pair = pairs.next().unwrap();
 
     match pair.as_rule() {
