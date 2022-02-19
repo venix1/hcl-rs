@@ -1,6 +1,6 @@
 mod ast;
 
-use crate::structure::{Attribute, Block, Body, Structure};
+use crate::structure::{Attribute, Block, BlockLabel, Body, Structure};
 use crate::Result;
 use crate::{Map, Value};
 pub use ast::Node;
@@ -36,7 +36,7 @@ fn parse_attribute(pair: Pair<Rule>) -> Attribute {
     let mut pairs = pair.into_inner();
 
     Attribute {
-        name: parse_string(pairs.next().unwrap()),
+        key: parse_string(pairs.next().unwrap()),
         value: parse_value(pairs.next().unwrap()),
     }
 }
@@ -44,22 +44,22 @@ fn parse_attribute(pair: Pair<Rule>) -> Attribute {
 fn parse_block(pair: Pair<Rule>) -> Block {
     let mut pairs = pair.into_inner();
 
-    let name = parse_string(pairs.next().unwrap());
+    let identifier = parse_string(pairs.next().unwrap());
 
     let (labels, block_body): (Vec<Pair<Rule>>, Vec<Pair<Rule>>) =
         pairs.partition(|pair| pair.as_rule() != Rule::BlockBody);
 
     Block {
-        name,
+        identifier,
         labels: labels.into_iter().map(parse_block_label).collect(),
         body: parse_block_body(block_body.into_iter().next().unwrap()),
     }
 }
 
-fn parse_block_label(pair: Pair<Rule>) -> String {
+fn parse_block_label(pair: Pair<Rule>) -> BlockLabel {
     match pair.as_rule() {
-        Rule::Identifier => parse_string(pair),
-        Rule::StringLit => parse_string(inner(pair)),
+        Rule::Identifier => BlockLabel::Identifier(parse_string(pair)),
+        Rule::StringLit => BlockLabel::StringLit(parse_string(inner(pair))),
         rule => unexpected_rule(rule),
     }
 }

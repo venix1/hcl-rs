@@ -20,7 +20,7 @@ impl Body {
         self.0.into_iter().fold(Map::new(), |mut map, structure| {
             match structure {
                 Structure::Attribute(attr) => {
-                    map.insert(attr.name, Node::Value(attr.value));
+                    map.insert(attr.key, Node::Value(attr.value));
                 }
                 Structure::Block(block) => {
                     block.into_map().into_iter().for_each(|(key, mut node)| {
@@ -97,17 +97,18 @@ impl From<Structure> for Value {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Attribute {
-    pub name: String,
+    pub key: String,
     pub value: Value,
 }
 
 impl Attribute {
-    pub fn new<V>(name: &str, value: V) -> Attribute
+    pub fn new<K, V>(key: K, value: V) -> Attribute
     where
+        K: Into<String>,
         V: Into<Value>,
     {
         Attribute {
-            name: name.to_string(),
+            key: key.into(),
             value: value.into(),
         }
     }
@@ -115,41 +116,45 @@ impl Attribute {
 
 impl From<Attribute> for Value {
     fn from(attr: Attribute) -> Value {
-        Value::from_iter(std::iter::once((attr.name, attr.value)))
+        Value::from_iter(std::iter::once((attr.key, attr.value)))
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block {
-    pub name: String,
-    pub labels: Vec<String>,
+    pub identifier: String,
+    pub labels: Vec<BlockLabel>,
     pub body: Body,
 }
 
 impl Block {
-    pub fn new<I>(name: &str, labels: I, body: Body) -> Block
+    pub fn new<I, L>(identifier: I, labels: L, body: Body) -> Block
     where
-        I: IntoIterator,
-        I::Item: Into<String>,
+        I: Into<String>,
+        L: IntoIterator,
+        L::Item: Into<BlockLabel>,
     {
         Block {
-            name: name.to_string(),
+            identifier: identifier.into(),
             labels: labels.into_iter().map(Into::into).collect(),
-            body: body,
+            body,
         }
     }
 
-    pub fn builder(name: &str) -> BlockBuilder {
-        BlockBuilder::new(name)
+    pub fn builder<I>(identifier: I) -> BlockBuilder
+    where
+        I: Into<String>,
+    {
+        BlockBuilder::new(identifier)
     }
 
     fn into_map(self) -> Map<String, Node> {
         let mut labels = self.labels.into_iter();
 
         let node = match labels.next() {
-            Some(name) => {
+            Some(label) => {
                 let block = Block {
-                    name,
+                    identifier: label.into_inner(),
                     labels: labels.collect(),
                     body: self.body,
                 };
@@ -159,13 +164,51 @@ impl Block {
             None => Node::BlockBodies(vec![self.body]),
         };
 
-        Map::from_iter(std::iter::once((self.name, node)))
+        Map::from_iter(std::iter::once((self.identifier, node)))
     }
 }
 
 impl From<Block> for Value {
     fn from(block: Block) -> Value {
         Value::from_iter(block.into_map())
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BlockLabel {
+    Identifier(String),
+    StringLit(String),
+}
+
+impl BlockLabel {
+    pub fn identifier<I>(identifier: I) -> Self
+    where
+        I: Into<String>,
+    {
+        BlockLabel::Identifier(identifier.into())
+    }
+
+    pub fn string_lit<S>(string: S) -> Self
+    where
+        S: Into<String>,
+    {
+        BlockLabel::StringLit(string.into())
+    }
+
+    pub fn into_inner(self) -> String {
+        match self {
+            BlockLabel::Identifier(ident) => ident,
+            BlockLabel::StringLit(string) => string,
+        }
+    }
+}
+
+impl<T> From<T> for BlockLabel
+where
+    T: Into<String>,
+{
+    fn from(v: T) -> BlockLabel {
+        BlockLabel::string_lit(v)
     }
 }
 
@@ -220,41 +263,53 @@ impl Node {
 
 #[derive(Debug)]
 pub struct BlockBuilder {
-    name: String,
-    labels: Vec<String>,
+    identifier: String,
+    labels: Vec<BlockLabel>,
     body: Vec<Structure>,
 }
 
 impl BlockBuilder {
-    pub fn new(name: &str) -> BlockBuilder {
+    pub fn new<I>(identifier: I) -> BlockBuilder
+    where
+        I: Into<String>,
+    {
         BlockBuilder {
-            name: name.to_string(),
+            identifier: identifier.into(),
             labels: Vec::new(),
             body: Vec::new(),
         }
     }
 
-    pub fn add_label(mut self, label: &str) -> BlockBuilder {
-        self.labels.push(label.to_string());
-        self
-    }
-
-    pub fn add_attribute(mut self, attr: Attribute) -> BlockBuilder {
-        self.body.push(Structure::Attribute(attr));
-        self
-    }
-
-    pub fn add_block(mut self, block: Block) -> BlockBuilder {
-        self.body.push(Structure::Block(block));
-        self
-    }
-
-    pub fn labels<I>(mut self, iter: I) -> BlockBuilder
+    pub fn add_label<L>(mut self, label: L) -> BlockBuilder
     where
-        I: IntoIterator,
-        I::Item: Into<String>,
+        L: Into<BlockLabel>,
     {
-        self.labels = iter.into_iter().map(Into::into).collect();
+        self.labels.push(label.into());
+        self
+    }
+
+    pub fn add_attribute<A>(mut self, attr: A) -> BlockBuilder
+    where
+        A: Into<Attribute>,
+    {
+        self.body.push(Structure::Attribute(attr.into()));
+        self
+    }
+
+    pub fn add_block<B>(mut self, block: B) -> BlockBuilder
+    where
+        B: Into<Block>,
+    {
+        self.body.push(Structure::Block(block.into()));
+        self
+    }
+
+    pub fn labels<L>(mut self, labels: L) -> BlockBuilder
+    where
+        L: IntoIterator,
+        L::Item: Into<BlockLabel>,
+    {
+        self.labels = labels.into_iter().map(Into::into).collect();
         self
     }
 
@@ -269,7 +324,7 @@ impl BlockBuilder {
 
     pub fn build(self) -> Block {
         Block {
-            name: self.name,
+            identifier: self.identifier,
             labels: self.labels,
             body: Body::from_iter(self.body),
         }
