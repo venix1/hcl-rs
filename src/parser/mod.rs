@@ -1,9 +1,6 @@
-mod ast;
-
 use crate::structure::{Attribute, Block, BlockLabel, Body, Structure};
 use crate::Result;
 use crate::{Map, Value};
-pub use ast::Node;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser as ParserTrait;
 use pest_derive::Parser;
@@ -154,12 +151,6 @@ impl<'a> Iterator for KeyValueIter<'a> {
             (_, _) => None,
         }
     }
-}
-
-/// Parses a HCL `Node` from a `&str`.
-pub fn parse_node(input: &str) -> Result<Node<'_>> {
-    let pair = HclParser::parse(Rule::Hcl, input)?.next().unwrap();
-    Ok(Node::from_pair(pair))
 }
 
 #[cfg(test)]

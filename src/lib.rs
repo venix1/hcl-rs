@@ -3,7 +3,6 @@
 #![warn(missing_docs)]
 
 pub mod de;
-mod de_v2;
 pub mod error;
 mod number;
 mod parser;
