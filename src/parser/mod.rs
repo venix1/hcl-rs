@@ -1,8 +1,8 @@
-use crate::structure::{Attribute, Block, BlockLabel, Body, Structure};
-use crate::Result;
-use crate::{Map, Value};
-use pest::iterators::{Pair, Pairs};
-use pest::Parser as ParserTrait;
+use crate::{Attribute, Block, BlockLabel, Body, Map, Result, Structure, Value};
+use pest::{
+    iterators::{Pair, Pairs},
+    Parser as ParserTrait,
+};
 use pest_derive::Parser;
 use std::str::FromStr;
 
@@ -11,6 +11,42 @@ use std::str::FromStr;
 struct HclParser;
 
 /// Parses a HCL `Body` from a `&str`.
+///
+/// If deserialization into a different type is preferred consider using [`hcl::from_str`][from_str].
+///
+/// [from_str]: ./de/fn.from_str.html
+///
+/// ## Example
+///
+/// ```
+/// use hcl::{Attribute, Block, Body};
+/// # use std::error::Error;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// let input = r#"
+///     some_attr = "foo"
+///
+///     some_block "some_block_label" {
+///       attr = "value"
+///     }
+/// "#;
+///
+/// let expected = Body::builder()
+///     .add_attribute(Attribute::new("some_attr", "foo"))
+///     .add_block(
+///         Block::builder("some_block")
+///             .add_label("some_block_label")
+///             .add_attribute(Attribute::new("attr", "value"))
+///             .build()
+///     )
+///     .build();
+///
+/// let body = hcl::parse(input)?;
+///
+/// assert_eq!(body, expected);
+/// #   Ok(())
+/// # }
+/// ```
 pub fn parse(input: &str) -> Result<Body> {
     let pair = HclParser::parse(Rule::Hcl, input)?.next().unwrap();
 

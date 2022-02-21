@@ -39,9 +39,19 @@ impl Deserializer {
 
 /// Deserialize an instance of type `T` from a string of HCL text.
 ///
+/// If preserving HCL semantics is required consider using [`hcl::parse`][parse] to parse the
+/// input into a [`Body`][Body].
+///
+/// [parse]: ../fn.parse.html
+/// [Body]: ../struct.Body.html
+///
 /// ## Example
 ///
 /// ```
+/// use serde_json::{json, Value};
+/// # use std::error::Error;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
 /// let input = r#"
 ///     some_attr = {
 ///       foo = [1, 2]
@@ -53,8 +63,23 @@ impl Deserializer {
 ///     }
 /// "#;
 ///
-/// let v: hcl::Value = hcl::from_str(input).unwrap();
-/// println!("{:#?}", v);
+/// let expected = json!({
+///     "some_attr": {
+///         "foo": [1, 2],
+///         "bar": true
+///     },
+///     "some_block": {
+///         "some_block_label": {
+///             "attr": "value"
+///         }
+///     }
+/// });
+///
+/// let value: Value = hcl::from_str(input)?;
+///
+/// assert_eq!(value, expected);
+/// #   Ok(())
+/// # }
 /// ```
 pub fn from_str<'de, T>(s: &'de str) -> Result<T>
 where
@@ -66,9 +91,19 @@ where
 
 /// Deserialize an instance of type `T` from an IO stream of HCL.
 ///
+/// If preserving HCL semantics is required consider using [`hcl::parse`][parse] to parse the
+/// input into a [`Body`][Body].
+///
+/// [parse]: ../fn.parse.html
+/// [Body]: ../struct.Body.html
+///
 /// ## Example
 ///
 /// ```
+/// use serde_json::{json, Value};
+/// # use std::error::Error;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
 /// let input = r#"
 ///     some_attr = {
 ///       foo = [1, 2]
@@ -80,8 +115,23 @@ where
 ///     }
 /// "#;
 ///
-/// let v: hcl::Value = hcl::from_reader(input.as_bytes()).unwrap();
-/// println!("{:#?}", v);
+/// let expected = json!({
+///     "some_attr": {
+///         "foo": [1, 2],
+///         "bar": true
+///     },
+///     "some_block": {
+///         "some_block_label": {
+///             "attr": "value"
+///         }
+///     }
+/// });
+///
+/// let value: Value = hcl::from_reader(input.as_bytes())?;
+///
+/// assert_eq!(value, expected);
+/// #   Ok(())
+/// # }
 /// ```
 pub fn from_reader<T, R>(mut reader: R) -> Result<T>
 where
