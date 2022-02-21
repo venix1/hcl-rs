@@ -144,6 +144,15 @@ where
     from_str(&s)
 }
 
+/// Deserialize an instance of type `T` from a byte slice.
+pub fn from_slice<'de, T>(buf: &'de [u8]) -> Result<T>
+where
+    T: Deserialize<'de>,
+{
+    let s = std::str::from_utf8(buf)?;
+    from_str(s)
+}
+
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer {
     type Error = Error;
 

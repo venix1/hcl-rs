@@ -12,6 +12,10 @@ impl Body {
         self.0
     }
 
+    pub fn iter(&self) -> std::slice::Iter<'_, Structure> {
+        self.0.iter()
+    }
+
     pub fn builder() -> BodyBuilder {
         BodyBuilder::default()
     }
