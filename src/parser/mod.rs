@@ -142,9 +142,8 @@ fn inner(pair: Pair<Rule>) -> Pair<Rule> {
 fn parse_map_key(pair: Pair<Rule>) -> String {
     match pair.as_rule() {
         Rule::Identifier => parse_string(pair),
-        Rule::Expression => parse_expression(pair),
         Rule::StringLit => parse_string(inner(pair)),
-        rule => unexpected_rule(rule),
+        _ => parse_expression(pair),
     }
 }
 
