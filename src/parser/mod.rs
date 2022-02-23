@@ -161,6 +161,7 @@ fn parse_expression(pair: Pair<Rule>) -> String {
     s
 }
 
+#[track_caller]
 fn unexpected_rule(rule: Rule) -> ! {
     panic!("unexpected rule: {:?}", rule)
 }
