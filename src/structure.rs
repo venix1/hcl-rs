@@ -20,18 +20,21 @@ impl Body {
         BodyBuilder::default()
     }
 
-    fn into_map(self) -> Map<String, Node> {
+    fn into_node_map(self) -> Map<String, Node> {
         self.0.into_iter().fold(Map::new(), |mut map, structure| {
             match structure {
                 Structure::Attribute(attr) => {
                     map.insert(attr.key, Node::Value(attr.value));
                 }
                 Structure::Block(block) => {
-                    block.into_map().into_iter().for_each(|(key, mut node)| {
-                        map.entry(key)
-                            .and_modify(|entry| entry.deep_merge(&mut node))
-                            .or_insert(node);
-                    });
+                    block
+                        .into_node_map()
+                        .into_iter()
+                        .for_each(|(key, mut node)| {
+                            map.entry(key)
+                                .and_modify(|entry| entry.deep_merge(&mut node))
+                                .or_insert(node);
+                        });
                 }
             };
 
@@ -42,16 +45,19 @@ impl Body {
 
 impl From<Body> for Value {
     fn from(body: Body) -> Value {
-        Value::from_iter(body.into_map())
+        Value::from_iter(body.into_node_map())
     }
 }
 
-impl FromIterator<Structure> for Body {
+impl<S> FromIterator<S> for Body
+where
+    S: Into<Structure>,
+{
     fn from_iter<I>(iter: I) -> Self
     where
-        I: IntoIterator<Item = Structure>,
+        I: IntoIterator<Item = S>,
     {
-        Body(iter.into_iter().collect())
+        Body(iter.into_iter().map(Into::into).collect())
     }
 }
 
@@ -69,13 +75,50 @@ impl IntoIterator for Body {
 pub struct BodyBuilder(Vec<Structure>);
 
 impl BodyBuilder {
-    pub fn add_attribute(mut self, attr: Attribute) -> BodyBuilder {
-        self.0.push(Structure::Attribute(attr));
+    pub fn add_attribute<A>(self, attr: A) -> BodyBuilder
+    where
+        A: Into<Attribute>,
+    {
+        self.add_structure(attr.into())
+    }
+
+    pub fn add_attributes<A>(self, attrs: A) -> BodyBuilder
+    where
+        A: IntoIterator,
+        A::Item: Into<Attribute>,
+    {
+        self.add_structures(attrs.into_iter().map(Into::into))
+    }
+
+    pub fn add_block<B>(self, block: B) -> BodyBuilder
+    where
+        B: Into<Block>,
+    {
+        self.add_structure(block.into())
+    }
+
+    pub fn add_blocks<B>(self, blocks: B) -> BodyBuilder
+    where
+        B: IntoIterator,
+        B::Item: Into<Block>,
+    {
+        self.add_structures(blocks.into_iter().map(Into::into))
+    }
+
+    pub fn add_structure<S>(mut self, structure: S) -> BodyBuilder
+    where
+        S: Into<Structure>,
+    {
+        self.0.push(structure.into());
         self
     }
 
-    pub fn add_block(mut self, block: Block) -> BodyBuilder {
-        self.0.push(Structure::Block(block));
+    pub fn add_structures<S>(mut self, structures: S) -> BodyBuilder
+    where
+        S: IntoIterator,
+        S::Item: Into<Structure>,
+    {
+        self.0.extend(structures.into_iter().map(Into::into));
         self
     }
 
@@ -96,6 +139,18 @@ impl From<Structure> for Value {
             Structure::Attribute(attr) => attr.into(),
             Structure::Block(block) => block.into(),
         }
+    }
+}
+
+impl From<Attribute> for Structure {
+    fn from(attr: Attribute) -> Structure {
+        Structure::Attribute(attr)
+    }
+}
+
+impl From<Block> for Structure {
+    fn from(block: Block) -> Structure {
+        Structure::Block(block)
     }
 }
 
@@ -124,6 +179,27 @@ impl From<Attribute> for Value {
     }
 }
 
+impl<K, V> From<(K, V)> for Attribute
+where
+    K: Into<String>,
+    V: Into<Value>,
+{
+    fn from(pair: (K, V)) -> Attribute {
+        Attribute::new(pair.0.into(), pair.1.into())
+    }
+}
+
+impl<K, V> From<&(K, V)> for Attribute
+where
+    K: Into<String>,
+    V: Into<Value>,
+    (K, V): Clone,
+{
+    fn from(pair: &(K, V)) -> Attribute {
+        From::from(pair.clone())
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block {
     pub identifier: String,
@@ -132,16 +208,18 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new<I, L>(identifier: I, labels: L, body: Body) -> Block
+    pub fn new<I, L, B>(identifier: I, labels: L, body: B) -> Block
     where
         I: Into<String>,
         L: IntoIterator,
         L::Item: Into<BlockLabel>,
+        B: IntoIterator,
+        B::Item: Into<Structure>,
     {
         Block {
             identifier: identifier.into(),
             labels: labels.into_iter().map(Into::into).collect(),
-            body,
+            body: body.into_iter().collect(),
         }
     }
 
@@ -152,7 +230,7 @@ impl Block {
         BlockBuilder::new(identifier)
     }
 
-    fn into_map(self) -> Map<String, Node> {
+    fn into_node_map(self) -> Map<String, Node> {
         let mut labels = self.labels.into_iter();
 
         let node = match labels.next() {
@@ -163,9 +241,9 @@ impl Block {
                     body: self.body,
                 };
 
-                Node::Block(block.into_map())
+                Node::Block(block.into_node_map())
             }
-            None => Node::BlockBodies(vec![self.body]),
+            None => Node::BlockInner(vec![self.body]),
         };
 
         Map::from_iter(std::iter::once((self.identifier, node)))
@@ -174,7 +252,22 @@ impl Block {
 
 impl From<Block> for Value {
     fn from(block: Block) -> Value {
-        Value::from_iter(block.into_map())
+        Value::from_iter(block.into_node_map())
+    }
+}
+
+impl<I, B> From<(I, B)> for Block
+where
+    I: Into<String>,
+    B: IntoIterator,
+    B::Item: Into<Structure>,
+{
+    fn from(pair: (I, B)) -> Block {
+        Block {
+            identifier: pair.0.into(),
+            labels: Vec::new(),
+            body: pair.1.into_iter().collect(),
+        }
     }
 }
 
@@ -219,7 +312,7 @@ where
 enum Node {
     Empty,
     Block(Map<String, Node>),
-    BlockBodies(Vec<Body>),
+    BlockInner(Vec<Body>),
     Value(Value),
 }
 
@@ -228,7 +321,7 @@ impl From<Node> for Value {
         match node {
             Node::Empty => Value::Null,
             Node::Block(map) => Value::from_iter(map),
-            Node::BlockBodies(mut vec) => {
+            Node::BlockInner(mut vec) => {
                 // Flatten as per the [HCL JSON spec](json-spec)
                 //
                 // [json-spec]: https://github.com/hashicorp/hcl/blob/main/json/spec.md#blocks
@@ -257,7 +350,7 @@ impl Node {
                         .or_insert_with(|| node.take());
                 });
             }
-            (Node::BlockBodies(lhs), Node::BlockBodies(rhs)) => {
+            (Node::BlockInner(lhs), Node::BlockInner(rhs)) => {
                 lhs.append(rhs);
             }
             (lhs, rhs) => *lhs = rhs.take(),
@@ -269,7 +362,7 @@ impl Node {
 pub struct BlockBuilder {
     identifier: String,
     labels: Vec<BlockLabel>,
-    body: Vec<Structure>,
+    body: BodyBuilder,
 }
 
 impl BlockBuilder {
@@ -280,7 +373,7 @@ impl BlockBuilder {
         BlockBuilder {
             identifier: identifier.into(),
             labels: Vec::new(),
-            body: Vec::new(),
+            body: Body::builder(),
         }
     }
 
@@ -292,11 +385,29 @@ impl BlockBuilder {
         self
     }
 
+    pub fn add_labels<L>(mut self, labels: L) -> BlockBuilder
+    where
+        L: IntoIterator,
+        L::Item: Into<BlockLabel>,
+    {
+        self.labels.extend(labels.into_iter().map(Into::into));
+        self
+    }
+
     pub fn add_attribute<A>(mut self, attr: A) -> BlockBuilder
     where
         A: Into<Attribute>,
     {
-        self.body.push(Structure::Attribute(attr.into()));
+        self.body = self.body.add_attribute(attr);
+        self
+    }
+
+    pub fn add_attributes<A>(mut self, attrs: A) -> BlockBuilder
+    where
+        A: IntoIterator,
+        A::Item: Into<Attribute>,
+    {
+        self.body = self.body.add_attributes(attrs);
         self
     }
 
@@ -304,25 +415,33 @@ impl BlockBuilder {
     where
         B: Into<Block>,
     {
-        self.body.push(Structure::Block(block.into()));
+        self.body = self.body.add_block(block);
         self
     }
 
-    pub fn labels<L>(mut self, labels: L) -> BlockBuilder
+    pub fn add_blocks<B>(mut self, blocks: B) -> BlockBuilder
     where
-        L: IntoIterator,
-        L::Item: Into<BlockLabel>,
+        B: IntoIterator,
+        B::Item: Into<Block>,
     {
-        self.labels = labels.into_iter().map(Into::into).collect();
+        self.body = self.body.add_blocks(blocks);
         self
     }
 
-    pub fn body<I>(mut self, iter: I) -> BlockBuilder
+    pub fn add_structure<S>(mut self, structure: S) -> BlockBuilder
     where
-        I: IntoIterator,
-        I::Item: Into<Structure>,
+        S: Into<Structure>,
     {
-        self.body = iter.into_iter().map(Into::into).collect();
+        self.body = self.body.add_structure(structure);
+        self
+    }
+
+    pub fn add_structures<S>(mut self, structures: S) -> BlockBuilder
+    where
+        S: IntoIterator,
+        S::Item: Into<Structure>,
+    {
+        self.body = self.body.add_structures(structures);
         self
     }
 
@@ -330,7 +449,7 @@ impl BlockBuilder {
         Block {
             identifier: self.identifier,
             labels: self.labels,
-            body: Body::from_iter(self.body),
+            body: self.body.build(),
         }
     }
 }
@@ -344,27 +463,27 @@ mod test {
     #[test]
     fn test_into_value() {
         let body = Body::builder()
-            .add_attribute(Attribute::new("foo", "bar"))
-            .add_attribute(Attribute::new("bar", "baz"))
+            .add_attribute(("foo", "bar"))
+            .add_attribute(("bar", "baz"))
             .add_block(
                 Block::builder("bar")
                     .add_label("baz")
-                    .add_attribute(Attribute::new("foo", "bar"))
+                    .add_attribute(("foo", "bar"))
                     .build(),
             )
             .add_block(
                 Block::builder("bar")
                     .add_label("qux")
-                    .add_attribute(Attribute::new("foo", 1))
+                    .add_attribute(("foo", 1))
                     .build(),
             )
             .add_block(
                 Block::builder("bar")
                     .add_label("baz")
-                    .add_attribute(Attribute::new("bar", "baz"))
+                    .add_attribute(("bar", "baz"))
                     .build(),
             )
-            .add_attribute(Attribute::new("foo", "baz"))
+            .add_attribute(("foo", "baz"))
             .build();
 
         let value = json!({
@@ -381,6 +500,9 @@ mod test {
                 "qux": {
                     "foo": 1
                 }
+            },
+            "baz": {
+                "qux": 2
             }
         });
 

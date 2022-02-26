@@ -17,5 +17,5 @@ pub use error::{Error, Result};
 pub use number::Number;
 pub use parser::parse;
 pub use ser::{to_string, to_vec, to_writer, Serializer};
-pub use structure::*;
+pub use structure::{Attribute, Block, BlockLabel, Body, Structure};
 pub use value::{Map, Value};
