@@ -1,5 +1,12 @@
 # Changelog
 
+### [0.2.1](https://github.com/martinohmann/hcl-rs/compare/v0.2.0...v0.2.1) (2022-03-10)
+
+
+### Miscellaneous
+
+* **deps:** bump actions/checkout from 2 to 3 ([#6](https://github.com/martinohmann/hcl-rs/issues/6)) ([79e7ff2](https://github.com/martinohmann/hcl-rs/commit/79e7ff23ffdd3cd9c7ccb8aa68680d0906274bf1))
+
 ## [0.2.0](https://github.com/martinohmann/hcl-rs/compare/v0.1.0...v0.2.0) (2022-03-04)
 
 
